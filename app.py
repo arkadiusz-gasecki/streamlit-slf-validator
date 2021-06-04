@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import SessionState
 import requests, json
+import io, base64, csv
 
 ### set up page settings
 st.set_page_config(page_title="File uploader", layout="wide", initial_sidebar_state="expanded")
@@ -79,7 +80,29 @@ def get_object_info(env, token, object_name):
 	df = pd.DataFrame(lst, columns=params)
 	return df
 
+def color_nan(x):
+	if isinstance(x,list):
+		return 'color: black'
+	elif pd.isnull(x):
+		return 'color: red'
+	elif x == False and isinstance(x,bool):
+		return 'color: red'
+	return 'color: black'
+		
+def compare_lists(src_list, tgt_list):
+	if isinstance(src_list,list) and isinstance(tgt_list,list):
+		for elem in src_list:
+			if elem not in tgt_list:
+				return False		
+		return True
+	else:
+		return None
 
+def get_table_download_link_csv(df,filename):
+    csv_file = df.to_csv(sep=';',quoting = csv.QUOTE_ALL, quotechar='"').encode()
+    b64 = base64.b64encode(csv_file).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="'+filename+'.csv" target="_blank">Download csv file</a>'
+    return href
 
 #########################  main content ################################
 
@@ -117,8 +140,9 @@ if obj:
 
 	st.markdown('Rows for verification:')
 	df = df[~(df.iloc[:,0].str.contains('ignore') | df.iloc[:,0].eq('Out of Scope') | df.iloc[:,0].eq('No'))]
-	df = df[~df.iloc[:,5].str.contains('Will be provided')]
-	df
+	df = df[~(df.iloc[:,5].str.contains('Will be provided') | df.iloc[:,5].eq(' '))]
+	
+	st.dataframe(df)
 #Salesforce Field-API Sunrise Org (2,3)
 #Saleforce Field - API UPC Org (5,6)
 
@@ -138,20 +162,28 @@ col1,col2,col3 = st.beta_columns([1,1,1])
 if col2.button('Run check') and passwd == st.secrets['password']:
 	st.write('Running check')
 
+	# prepare expected struct
+	expect = df.iloc[:,[2,3,5,6]]
+	expect.columns = ['Target API Name','Target API Type','Source API Name','Source API Type']
+
 	# connect to source org
 	token = login(src_env)
 	src_struct = get_object_info(src_env, token, object_name)
-
-	src_expect = df.iloc[:,[5,6]]
-	src_expect.columns = ['API Name','API Type']
-
-	src_expect = src_expect.merge(src_struct,how='left',left_on='API Name',right_on='name')
-	src_expect
-
 	logout(src_env, token)
 
 
 	# connect to target org
 	token = login(tgt_env)
+	tgt_struct = get_object_info(tgt_env, token, object_name)
 	logout(tgt_env, token)
+
+	# prepare output
+	expect = expect.merge(src_struct,how='left',left_on='Source API Name',right_on='name',suffixes=('','_src'))
+	expect = expect.merge(tgt_struct,how='left',left_on='Target API Name',right_on='name',suffixes=('','_tgt'))
+
+	expect['Picklists Same'] = expect.apply(lambda row: compare_lists(row['picklistValues'],row['picklistValues_tgt']), axis=1)
+	
+	st.dataframe(expect.style.applymap(color_nan), height=600)
+	st.markdown(get_table_download_link_csv(expect,object_name), unsafe_allow_html=True)
+
 
