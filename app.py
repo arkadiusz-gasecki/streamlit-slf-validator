@@ -70,14 +70,46 @@ def get_object_info(env, token, object_name):
 	}	
 	obj_metadata_response = requests.get(request_url, headers=header)
 	response = json.loads(obj_metadata_response.text)
-	
+
 	#parse response about object
-	params = ['name', 'label', 'type', 'length', 'createable', 'updateable', 'referenceTo' ,'picklistValues']
+	params = ['name', 'label', 'type', 'length', 'createable', 'updateable', 'referenceTo' ,'picklistValues','filteredLookupInfo','nillable','defaultedOnCreate']
 	params.sort()
 	lst = list()
 	for column in response['fields']:
 		lst.append([ translate_arg(k,v) for k,v in column.items() if k in params ])
 	df = pd.DataFrame(lst, columns=params)
+	return df
+
+def get_validation_rules(env, token, object_name):
+	request_url = st.secrets[env]["url"] + "services/data/v51.0/tooling/query?q=Select Id,Active,Description,ErrorDisplayField,ErrorMessage From ValidationRule Where EntityDefinition.DeveloperName = '"+object_name+"' AND Active=TRUE"
+	header = {
+		'Authorization': 'Bearer '+token
+	}	
+	obj_metadata_response = requests.get(request_url, headers=header)
+	response = json.loads(obj_metadata_response.text)
+
+	params = ['Id', 'Active', 'Description', 'ErrorDisplayField', 'ErrorMessage' ]
+	
+	lst = list()
+	for column in response['records']:
+		lst.append([ translate_arg(k,v) for k,v in column.items() if k in params ])
+	df = pd.DataFrame(lst, columns=params)
+	return df
+
+def get_flows(env, token, object_name):
+	request_url = st.secrets[env]["url"] + "services/data/v51.0/tooling/query?q=SELECT Id, processType, description, status FROM Flow"
+
+	header = {
+		'Authorization': 'Bearer '+token
+	}	
+	obj_metadata_response = requests.get(request_url, headers=header)
+	response = json.loads(obj_metadata_response.text)
+
+	lst = list()
+	for entry in response['records']:
+		if entry['Status'] == 'Active':
+			lst.append([entry['Id'], entry['ProcessType'], entry['Status'], entry['Description']])
+	df = pd.DataFrame(lst, columns=['Id','ProcessType','Status','Description'])
 	return df
 
 def color_nan(x):
@@ -90,7 +122,7 @@ def color_nan(x):
 	return 'color: black'
 
 def main_format(x):
-	return 'font-size: 12pt'
+	return 'font-size: 12pt; min-width: 100px'
 		
 def compare_lists(src_list, tgt_list):
 	if isinstance(src_list,list) and isinstance(tgt_list,list):
@@ -145,7 +177,7 @@ if obj:
 	df = df[~(df.iloc[:,0].str.contains('ignore') | df.iloc[:,0].eq('Out of Scope') | df.iloc[:,0].eq('No'))]
 	df = df[~(df.iloc[:,5].str.contains('Will be provided') | df.iloc[:,5].eq(' '))]
 	if st.checkbox('Show raw data',value=True):
-		st.dataframe(df)
+		st.dataframe(df.style.applymap(main_format))
 #Salesforce Field-API Sunrise Org (2,3)
 #Saleforce Field - API UPC Org (5,6)
 
@@ -178,11 +210,18 @@ if col2.button('Run check') and passwd == st.secrets['password']:
 	# connect to target org
 	token = login(tgt_env)
 	tgt_struct = get_object_info(tgt_env, token, object_name)
+	tgt_validation_rules = get_validation_rules(tgt_env, token, object_name)
+	tgt_flows = get_flows(tgt_env, token, object_name)
 	logout(tgt_env, token)
 
 	# prepare output
 	expect = expect.merge(src_struct,how='left',left_on='Source API Name',right_on='name')
+	tmp_expect = expect.copy()
 	expect = expect.merge(tgt_struct,how='left',left_on='Target API Name',right_on='name',suffixes=('_src','_tgt'))
+
+	tmp_expect = tmp_expect.merge(tgt_struct, how='right',left_on='Target API Name', right_on='name', suffixes=('_src','_tgt'))
+	tmp_expect = tmp_expect[tmp_expect['nillable_tgt'].eq(False) & tmp_expect['defaultedOnCreate_tgt'].eq(False) & tmp_expect['Target API Name'].isnull()]
+	tmp_expect = tmp_expect.reindex(columns=['name_tgt','label_tgt','type_tgt', 'nillable_tgt', 'defaultedOnCreate_tgt'])
 
 	# do comparisons
 	expect['Picklists Same'] = expect.apply(lambda row: compare_lists(row['picklistValues_src'],row['picklistValues_tgt']), axis=1)
@@ -190,9 +229,21 @@ if col2.button('Run check') and passwd == st.secrets['password']:
 	expect['Lengths Same'] = expect.apply(lambda row: row['length_src'] == row['length_tgt'], axis=1)
 
 	# rearrange columns
-	expect = expect.reindex(columns=['Target API Name','Target API Type','Source API Name','Source API Type','name_src','label_src','name_tgt','label_tgt','createable_src','createable_tgt','updateable_src','updateable_tgt','referenceTo_src','referenceTo_tgt','type_src','type_tgt','Types Same','length_src','length_tgt','Lengths Same','picklistValues_src','picklistValues_tgt','Picklists Same'])
+	expect = expect.reindex(columns=['Target API Name','Target API Type','Source API Name','Source API Type','name_src','label_src','name_tgt','label_tgt','createable_src','createable_tgt','updateable_src','updateable_tgt','referenceTo_src','referenceTo_tgt','type_src','type_tgt','Types Same','length_src','length_tgt','Lengths Same','picklistValues_src','picklistValues_tgt','Picklists Same','filteredLookupInfo_tgt'])
 	
 	st.dataframe(expect.style.applymap(color_nan).applymap(main_format), height=800)
 	st.markdown(get_table_download_link_csv(expect,object_name), unsafe_allow_html=True)
+
+	#display other required fields
+	st.markdown('### Required non default fields missing in specification')
+	st.table(tmp_expect.style.applymap(main_format))
+
+	# display validation rules
+	st.markdown('### Validation rules for target object')
+	st.table(tgt_validation_rules.style.applymap(main_format))
+
+	#display flows
+	st.markdown("### Flows")
+	st.table(tgt_flows.style.applymap(main_format))
 
 
