@@ -84,10 +84,13 @@ def color_nan(x):
 	if isinstance(x,list):
 		return 'color: black'
 	elif pd.isnull(x):
-		return 'color: red'
+		return 'color: red; font-weight: bold; font-style: italic'
 	elif x == False and isinstance(x,bool):
-		return 'color: red'
+		return 'color: red; font-weight: bold; font-style: italic'
 	return 'color: black'
+
+def main_format(x):
+	return 'font-size: 12pt'
 		
 def compare_lists(src_list, tgt_list):
 	if isinstance(src_list,list) and isinstance(tgt_list,list):
@@ -141,8 +144,8 @@ if obj:
 	st.markdown('Rows for verification:')
 	df = df[~(df.iloc[:,0].str.contains('ignore') | df.iloc[:,0].eq('Out of Scope') | df.iloc[:,0].eq('No'))]
 	df = df[~(df.iloc[:,5].str.contains('Will be provided') | df.iloc[:,5].eq(' '))]
-	
-	st.dataframe(df)
+	if st.checkbox('Show raw data',value=True):
+		st.dataframe(df)
 #Salesforce Field-API Sunrise Org (2,3)
 #Saleforce Field - API UPC Org (5,6)
 
@@ -178,12 +181,18 @@ if col2.button('Run check') and passwd == st.secrets['password']:
 	logout(tgt_env, token)
 
 	# prepare output
-	expect = expect.merge(src_struct,how='left',left_on='Source API Name',right_on='name',suffixes=('','_src'))
-	expect = expect.merge(tgt_struct,how='left',left_on='Target API Name',right_on='name',suffixes=('','_tgt'))
+	expect = expect.merge(src_struct,how='left',left_on='Source API Name',right_on='name')
+	expect = expect.merge(tgt_struct,how='left',left_on='Target API Name',right_on='name',suffixes=('_src','_tgt'))
 
-	expect['Picklists Same'] = expect.apply(lambda row: compare_lists(row['picklistValues'],row['picklistValues_tgt']), axis=1)
+	# do comparisons
+	expect['Picklists Same'] = expect.apply(lambda row: compare_lists(row['picklistValues_src'],row['picklistValues_tgt']), axis=1)
+	expect['Types Same'] = expect.apply(lambda row: row['type_src'] == row['type_tgt'], axis=1)
+	expect['Lengths Same'] = expect.apply(lambda row: row['length_src'] == row['length_tgt'], axis=1)
+
+	# rearrange columns
+	expect = expect.reindex(columns=['Target API Name','Target API Type','Source API Name','Source API Type','name_src','label_src','name_tgt','label_tgt','createable_src','createable_tgt','updateable_src','updateable_tgt','referenceTo_src','referenceTo_tgt','type_src','type_tgt','Types Same','length_src','length_tgt','Lengths Same','picklistValues_src','picklistValues_tgt','Picklists Same'])
 	
-	st.dataframe(expect.style.applymap(color_nan), height=600)
+	st.dataframe(expect.style.applymap(color_nan).applymap(main_format), height=800)
 	st.markdown(get_table_download_link_csv(expect,object_name), unsafe_allow_html=True)
 
 
