@@ -162,7 +162,9 @@ else:
 	session_state.sheet_selected = obj
 
 ### -- add mapper to proper object name --- ###
-object_name = st.sidebar.text_input('Salesforce object name', '' if session_state.sheet_selected is None else session_state.sheet_selected.split('-')[0].strip())
+related_object = '' if session_state.sheet_selected is None else session_state.sheet_selected.split('-')[0].strip()
+related_object = 'AccountContactRelation' if related_object == 'Acc' else related_object
+object_name = st.sidebar.text_input('Salesforce object name', related_object)
 
 if obj:
 	df = read_rule_sheet(rule, session_state.sheet_names[0] if session_state.sheet_selected is None else session_state.sheet_selected)
