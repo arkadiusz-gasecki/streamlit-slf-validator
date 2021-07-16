@@ -190,7 +190,7 @@ src_env = st.sidebar.selectbox('Source environment',('UAT','UPRD'))
 tgt_env = st.sidebar.selectbox('Target environment',('D6','MIG1','SPRD'))
 
 ### -- password for connection ###
-passwd = st.sidebar.text_input('Password',type='password',key=50)
+passwd = st.sidebar.text_input('Password',type='password',key='50')
 
 ### -- part to trigger checking of structures -- ###
 st.markdown('#')
