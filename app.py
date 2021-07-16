@@ -179,7 +179,9 @@ if obj:
 	df = df[~(df.iloc[:,0].str.contains('ignore') | df.iloc[:,0].eq('Out of Scope') | df.iloc[:,0].eq('No'))]
 	df = df[~(df.iloc[:,5].str.contains('Will be provided') | df.iloc[:,5].eq(' '))]
 	if st.checkbox('Show raw data',value=True):
-		st.dataframe(df.style.applymap(main_format))
+		# for some reason styling does not want to work anymore
+		# st.dataframe(df.style.applymap(main_format))
+		st.dataframe(df)
 #Salesforce Field-API Sunrise Org (2,3)
 #Saleforce Field - API UPC Org (5,6)
 
@@ -233,16 +235,22 @@ if col2.button('Run check') and passwd == st.secrets['password']:
 	# rearrange columns
 	expect = expect.reindex(columns=['Target API Name','Target API Type','Source API Name','Source API Type','name_src','label_src','name_tgt','label_tgt','createable_src','createable_tgt','updateable_src','updateable_tgt','referenceTo_src','referenceTo_tgt','type_src','type_tgt','Types Same','length_src','length_tgt','Lengths Same','picklistValues_src','picklistValues_tgt','Picklists Same','filteredLookupInfo_tgt'])
 	
-	st.dataframe(expect.style.applymap(color_nan).applymap(main_format), height=800)
+	# for some reason styling does not want to work anymore
+	#st.dataframe(expect.style.applymap(color_nan).applymap(main_format), height=800)
+	st.table(expect)
 	st.markdown(get_table_download_link_csv(expect,object_name), unsafe_allow_html=True)
 
 	#display other required fields
 	st.markdown('### Required non default fields missing in specification')
-	st.table(tmp_expect.style.applymap(main_format))
+	# for some reason styling does not want to work anymore
+	#st.table(tmp_expect.style.applymap(main_format))
+	st.table(tmp_expect)
 
 	# display validation rules
 	st.markdown('### Validation rules for target object')
-	st.table(tgt_validation_rules.style.applymap(main_format))
+	# for some reason styling does not want to work anymore
+	#st.table(tgt_validation_rules.style.applymap(main_format))
+	st.table(tgt_validation_rules)
 
 	#display flows
 	st.markdown("### Flows")
