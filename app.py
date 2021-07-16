@@ -254,6 +254,8 @@ if col2.button('Run check') and passwd == st.secrets['password']:
 
 	#display flows
 	st.markdown("### Flows")
-	st.table(tgt_flows.style.applymap(main_format))
+	# for some reason styling does not want to work anymore
+	#st.table(tgt_flows.style.applymap(main_format))
+	st.table(tgt_flows)
 
 
